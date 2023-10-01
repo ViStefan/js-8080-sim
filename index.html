@@ -13,12 +13,6 @@
   #codetext::selection {
     background: #b4b4b4;
   }
-  /* 
-  #control, #control td {
-    border: 1px solid black;
-  }
-  */
-
   #codeLabels {
     table-layout: fixed;
   }
@@ -84,18 +78,29 @@
     font-weight: bold;
   }
 
- /*
-  #cpuState, #cpuState td {
-    border: 1px solid black;
+  #codetext {
+    width: 400px;
+    height: 600px;
   }
-  */
+
+  .breakpoint::before {
+    display: block;
+    width: 1em;
+    height: 1em;
+    position: absolute;
+    left: .5em;
+    border-radius: 50%;
+    background-color: red;
+    content: '';
+  }
 
 </style>
 <body>
 <table id="control">
   <tr>
     <td>
-      <button id="run" title="Run the program untill it reaches given steps.">Run</button> Max steps: <input size="6" id="maxsteps"></input>
+      <button id="run" title="Run the program untill it reaches given steps.">Run</button>
+      <button id="runtocursor" title="Run the program untill it reaches cursor.">Runtocursor</button> Max steps: <input size="6" id="maxsteps"></input>
       <button id="prev" title="Go backward in time for a single machine instruction.">Step prev</button>
       <button id="next" title="Execute a single machine instruction from current step.">Step next</button>
     </td>
@@ -123,7 +128,7 @@
       <table id="codeLabels">
         <tr>
           <td>
-            <textarea id="codetext" name="codetext" rows="36" cols="60" spellcheck="false"></textarea>
+            <div id="codetext"></div>
           </td>
         <tr class="spacerrow"></tr>
         <tr>
@@ -171,9 +176,7 @@
   </tr>
 </table>
 
-
 <!-- Include bundle. This exports a global symbol for accessing js8080sim -->
 <script src="js8080simBundle.js"></script>
 <script src="ui.js"></script>
-
 </body>

@@ -1224,6 +1224,7 @@ Cpu.prototype.execute = function(i) {
       // HALT
       this.cycles += 7;
       this.halted = 1;
+      this.pc -= 1;
     }
     break;
   case 0x77:

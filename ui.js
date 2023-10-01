@@ -1,8 +1,14 @@
 'use strict';
+'use esversion: 8';
 
 // This is for jshint that will worry it can't find js8080sim, which is injected
 // in a <script> tag in the HTML.
 /* globals js8080sim: false */
+
+var editor = js8080sim.ace.edit('codetext');
+editor.setTheme('ace/theme/solarized_light');
+
+var currentStep = 0;
 
 const STORAGE_ID = 'js8080sim';
 
@@ -11,14 +17,15 @@ const codetext = document.querySelector('#codetext');
 const maxsteps = document.querySelector('#maxsteps');
 const ramstart = document.querySelector('#ramstart');
 const ramshowmode = document.querySelector('#ramshowmode');
-codetext.addEventListener('keydown', onCodeTextKey);
 document.querySelector("#run").addEventListener("mousedown", () => dispatchStep("run"));
 document.querySelector("#prev").addEventListener("mousedown", () => dispatchStep("prev"));
 document.querySelector("#next").addEventListener("mousedown", () => dispatchStep("next"));
+document.querySelector("#runtocursor").addEventListener("mousedown", () => dispatchStep("runtocursor"));
 document.querySelector("#setsample").addEventListener("mousedown", onSetSample);
 document.querySelector("#showramstart").addEventListener("mousedown", onShowRamStart);
 document.querySelector("#ramstart").addEventListener("keyup", onRamStartKey);
 document.querySelector("#ramshowmode").addEventListener("change", onRamShowMode);
+
 
 let codeSamples = [
   {'name': '', 'code': ''},
@@ -232,7 +239,7 @@ function loadUiState() {
   ramstart.value = "0000";
 
   if (state) {
-    codetext.value = state.codetext;
+    editor.setValue(state.codetext, 1);
     if (state.maxsteps !== undefined) {
       maxsteps.value = state.maxsteps;
     }
@@ -246,7 +253,7 @@ function loadUiState() {
 
 function saveUiState() {
   let state = {
-    'codetext': codetext.value,
+    'codetext': editor.getValue(),
     'maxsteps': maxsteps.value
   };
   localStorage.setItem(STORAGE_ID, JSON.stringify(state));
@@ -294,6 +301,9 @@ function dispatchStep(event) {
     case "prev":
       onPrevStep();
       break;
+    case "runtocursor":
+      onRunCode(editor.getCursorPosition().row);
+      break;
     }
   } catch (e) {
     if (e instanceof js8080sim.ParseError ||
@@ -313,17 +323,19 @@ function onNextStep() {
 }
 
 function onPrevStep() {
-  let step = parseInt(maxsteps.value);
-  maxsteps.value = step - 1;
-  onRunCode();
+  if (maxsteps.value > 0) {
+    let step = parseInt(maxsteps.value);
+    maxsteps.value = step - 1;
+    onRunCode();
+  }
 }
 
-function onRunCode() {
+async function onRunCode(cursor) {
   saveUiState();
 
-  let prog = codetext.value;
+  let prog = editor.getValue();
 
-  let [state, mem, labelToAddr] = runProg(prog, parseInt(maxsteps.value));
+  let [state, mem, labelToAddr] = await runProg(prog, parseInt(maxsteps.value), cursor, editor.session.getBreakpoints());
   memFromLastRun = mem;
 
   // Populate CPU state / registers.
@@ -362,6 +374,10 @@ function onRunCode() {
   setStatusSuccess();
 }
 
+const delay = millis => new Promise((resolve, reject) => {
+  setTimeout(_ => resolve(), millis);
+});
+
 function onRamStartKey(event) {
   if (event.keyCode == 13) {
     onShowRamStart();
@@ -370,65 +386,95 @@ function onRamStartKey(event) {
   }
 }
 
-function onCodeTextKey(event) {
-  if (event.keyCode == 13) {
-    // Capture "Enter" to insert spaces similar to the previous line.
-    let pos = codetext.selectionStart;
-
-    let prevNewlinePos = pos - 1;
-    while (prevNewlinePos > 0 &&
-           codetext.value.charAt(prevNewlinePos) !== '\n') {
-      prevNewlinePos--;
-    }
-
-    let startLinePos = prevNewlinePos + 1;
-    while (codetext.value.charAt(startLinePos) === ' ') {
-      startLinePos++;
-    }
-
-    let numSpaces = startLinePos - prevNewlinePos - 1;
-
-    codetext.value = codetext.value.substring(0, pos) +
-                      '\n' +
-                      ' '.repeat(numSpaces) +
-                      codetext.value.substring(pos, codetext.value.length);
-    codetext.selectionStart = pos + numSpaces + 1;
-    codetext.selectionEnd = pos + numSpaces + 1;
-    event.stopPropagation();
-    event.preventDefault();
-  }
-}
-
-function runProg(progText, maxSteps) {
+async function runProg(progText, maxSteps, cursor, breakpoints) {
   let p = new js8080sim.Parser();
   let asm = new js8080sim.Assembler();
   let sourceLines = p.parse(progText);
   let [mem, labelToAddr] = asm.assemble(sourceLines);
 
-  const memoryTo = (addr, value) => {mem[addr] = value;};
-  const memoryAt = (addr) => {return mem[addr];};
+  const memoryTo = (addr, value) => {
+    mem[addr] = value;
+  };
+  const memoryAt = (addr) => {
+    return mem[addr];
+  };
   js8080sim.CPU8080.init(memoryTo, memoryAt);
   js8080sim.CPU8080.set('PC', 0);
 
-  if (maxSteps === undefined) {
-    maxSteps = 50000;
+  for (let i = 0; i < currentStep; i++) {
+    js8080sim.CPU8080.steps(1);
+    console.log('pc before: ' + js8080sim.CPU8080.status().pc);
   }
 
-  for (let i = 0; i < maxSteps; i++) {
+  maxSteps = 50000;
+  // if (maxSteps === undefined) {
+  //   maxSteps = 50000;
+  // }
+
+  let breakpointPcs = breakpoints
+      .map((x, y) => sourceLines
+              .filter((s) => s.pos.line === y + 1)
+              .map((f) => f.pc)[0]);
+
+  console.log(breakpointPcs);
+
+  for (let i = currentStep; i < maxSteps; i++) {
+    // if (!js8080sim.CPU8080.status().halted)
     js8080sim.CPU8080.steps(1);
 
+    console.log('pc after: ' + js8080sim.CPU8080.status().pc);
+
+    highlightCurrentLine(sourceLines, js8080sim.CPU8080.status().pc);
+    await delay(50);
+
+    if (breakpointPcs.indexOf(js8080sim.CPU8080.status().pc) !== -1) {
+      // console.log(breakpointPcs, js8080sim.CPU8080.status().pc);
+      currentStep = i + 1;
+      maxsteps.value = currentStep;
+      console.log(i);
+      break;
+    }
+
     if (js8080sim.CPU8080.status().halted) {
+      currentStep = i;
       break;
     }
   }
+  
+  highlightCurrentLine(sourceLines, js8080sim.CPU8080.status().pc);
 
   return [js8080sim.CPU8080.status(), mem, labelToAddr];
+}
+
+editor.on('gutterclick', function(e) {
+  let row = e.getDocumentPosition().row;
+
+  if (e.editor.session.getBreakpoints()[row] !== undefined) {
+    e.editor.session.clearBreakpoint(row);
+  } else {
+    e.editor.session.setBreakpoint(row, 'breakpoint');
+  }
+});
+
+function highlightCurrentLine(sourceLines, pc) {
+  Object.values(editor.session.getMarkers())
+      .filter((x) => x.clazz == 'ace_step')
+      .map((x) => editor.session.removeMarker(x.id));
+  for (let sl of sourceLines)
+  {
+    if (sl.pc === pc && ! sl.label)
+    {
+      let Range = js8080sim.ace.Range;
+      editor.session.addMarker(new Range(sl.pos.line - 1, 0, sl.pos.line - 1, 1), 'ace_step', 'fullLine');
+      return;
+    }
+  }
 }
 
 function onSetSample() {
   let samples = document.querySelector("#samples");
   let selectedSampleCode = codeSamples[samples.selectedIndex];
-  codetext.value = selectedSampleCode.code.replace(/^\n+/, '');
+  editor.setValue(selectedSampleCode.code.replace(/^\n+/, ''), 1);
 }
 
 function onShowRamStart() {
@@ -461,6 +507,13 @@ function populateRamTable() {
   for (let i = 0; i < 16 * 16; i++) {
     let memIndex = startAddr + i;
     let value = memFromLastRun[memIndex];
+    if (memIndex == js8080sim.CPU8080.status().pc) {
+      ramValues[i].parentElement.style.background = "#ffffc1";
+      ramValues[i].parentElement.style.fontWeight = "bold";
+    } else {
+      ramValues[i].parentElement.style.background = "inherit";
+      ramValues[i].parentElement.style.fontWeight = "normal";
+    }
     ramValues[i].textContent = useAscii ?
       ('.' + formatAscii(value)) :
       formatNum(value, 2);
