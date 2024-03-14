@@ -1,5 +1,6 @@
 'use strict';
-'use esversion: 8';
+
+// jshint esversion: 8
 
 // This is for jshint that will worry it can't find js8080sim, which is injected
 // in a <script> tag in the HTML.
@@ -14,12 +15,14 @@ const STORAGE_ID = 'js8080sim';
 
 // Set up listeners.
 const codetext = document.querySelector('#codetext');
-const maxsteps = document.querySelector('#maxsteps');
+const stepnumber= document.querySelector('#stepnumber');
 const ramstart = document.querySelector('#ramstart');
 const ramshowmode = document.querySelector('#ramshowmode');
+const delaycheckbox= document.querySelector('#delaycheckbox');
 document.querySelector("#run").addEventListener("mousedown", () => dispatchStep("run"));
 document.querySelector("#prev").addEventListener("mousedown", () => dispatchStep("prev"));
 document.querySelector("#next").addEventListener("mousedown", () => dispatchStep("next"));
+document.querySelector("#stop").addEventListener("mousedown", () => dispatchStep("stop"));
 document.querySelector("#runtocursor").addEventListener("mousedown", () => dispatchStep("runtocursor"));
 document.querySelector("#setsample").addEventListener("mousedown", onSetSample);
 document.querySelector("#showramstart").addEventListener("mousedown", onShowRamStart);
@@ -235,14 +238,10 @@ function loadUiState() {
   let state = JSON.parse(localStorage.getItem(STORAGE_ID));
 
   // Defaults that will be overridden when reading state.
-  maxsteps.value = "10000";
   ramstart.value = "0000";
 
   if (state) {
     editor.setValue(state.codetext, 1);
-    if (state.maxsteps !== undefined) {
-      maxsteps.value = state.maxsteps;
-    }
     if (state.ramstart !== undefined) {
       ramstart.value = state.ramstart;
     }
@@ -254,7 +253,6 @@ function loadUiState() {
 function saveUiState() {
   let state = {
     'codetext': editor.getValue(),
-    'maxsteps': maxsteps.value
   };
   localStorage.setItem(STORAGE_ID, JSON.stringify(state));
 }
@@ -280,17 +278,8 @@ function setStatusReady() {
 // RAM per the user's request in the RAM table.
 let memFromLastRun = new Array(65536).fill(0);
 
-// Checks if the value in the maxsteps box is valid; throws exception if not.
-function checkSteps() {
-    if (maxsteps.value === 'undefined' || isNaN(parseInt(maxsteps.value)) ||
-        parseInt(maxsteps.value) < 0) {
-    throw new Error(`Steps value is invalid`);
-  }
-}
-
 function dispatchStep(event) {
   try {
-    checkSteps();
     switch (event) {
     case "run":
       onRunCode();
@@ -303,6 +292,10 @@ function dispatchStep(event) {
       break;
     case "runtocursor":
       onRunCode(editor.getCursorPosition().row);
+      break;
+    case "stop":
+      currentStep = 0;
+      onRunCode(0, true);
       break;
     }
   } catch (e) {
@@ -317,25 +310,27 @@ function dispatchStep(event) {
 }
 
 function onNextStep() {
-  let step = parseInt(maxsteps.value);
-  maxsteps.value = step + 1;
-  onRunCode();
+  currentStep++;
+  onRunCode(undefined, true);
 }
 
 function onPrevStep() {
-  if (maxsteps.value > 0) {
-    let step = parseInt(maxsteps.value);
-    maxsteps.value = step - 1;
-    onRunCode();
-  }
+  if (currentStep > 0) currentStep--;
+  onRunCode(undefined, true);
 }
 
-async function onRunCode(cursor) {
+async function onRunCode(cursor, stepping= false) {
   saveUiState();
 
   let prog = editor.getValue();
 
-  let [state, mem, labelToAddr] = await runProg(prog, parseInt(maxsteps.value), cursor, editor.session.getBreakpoints());
+  var breakpoints = editor.session.getBreakpoints().slice();
+
+  if (cursor !== undefined) {
+    breakpoints[cursor] = 'breakpoint';
+  }
+
+  let [state, mem, labelToAddr] = await runProg(prog, stepping ? currentStep : undefined, breakpoints);
   memFromLastRun = mem;
 
   // Populate CPU state / registers.
@@ -386,7 +381,7 @@ function onRamStartKey(event) {
   }
 }
 
-async function runProg(progText, maxSteps, cursor, breakpoints) {
+async function runProg(progText, maxSteps, breakpoints) {
   let p = new js8080sim.Parser();
   let asm = new js8080sim.Assembler();
   let sourceLines = p.parse(progText);
@@ -403,40 +398,38 @@ async function runProg(progText, maxSteps, cursor, breakpoints) {
 
   for (let i = 0; i < currentStep; i++) {
     js8080sim.CPU8080.steps(1);
-    console.log('pc before: ' + js8080sim.CPU8080.status().pc);
   }
 
-  maxSteps = 50000;
-  // if (maxSteps === undefined) {
-  //   maxSteps = 50000;
-  // }
+  stepnumber.value = currentStep;
+
+  if (maxSteps === undefined) {
+     maxSteps = Infinity;
+  }
 
   let breakpointPcs = breakpoints
       .map((x, y) => sourceLines
               .filter((s) => s.pos.line === y + 1)
               .map((f) => f.pc)[0]);
 
-  console.log(breakpointPcs);
-
   for (let i = currentStep; i < maxSteps; i++) {
     // if (!js8080sim.CPU8080.status().halted)
     js8080sim.CPU8080.steps(1);
 
-    console.log('pc after: ' + js8080sim.CPU8080.status().pc);
-
     highlightCurrentLine(sourceLines, js8080sim.CPU8080.status().pc);
-    await delay(50);
+    stepnumber.value = i;
+
+
+    if (delaycheckbox.checked) await delay(150);
 
     if (breakpointPcs.indexOf(js8080sim.CPU8080.status().pc) !== -1) {
-      // console.log(breakpointPcs, js8080sim.CPU8080.status().pc);
       currentStep = i + 1;
-      maxsteps.value = currentStep;
-      console.log(i);
+      stepnumber.value = currentStep;
       break;
     }
 
     if (js8080sim.CPU8080.status().halted) {
       currentStep = i;
+      stepnumber.value = currentStep;
       break;
     }
   }
@@ -501,13 +494,13 @@ function populateRamTable() {
     headerStart += 16;
   }
 
-  const useAscii = ramshowmode.value == "ASCII";
+  const useAscii = ramshowmode.value === "ASCII";
 
   // Set table contents.
   for (let i = 0; i < 16 * 16; i++) {
     let memIndex = startAddr + i;
     let value = memFromLastRun[memIndex];
-    if (memIndex == js8080sim.CPU8080.status().pc) {
+    if (memIndex === js8080sim.CPU8080.status().pc) {
       ramValues[i].parentElement.style.background = "#ffffc1";
       ramValues[i].parentElement.style.fontWeight = "bold";
     } else {

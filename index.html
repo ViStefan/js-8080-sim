@@ -1,108 +1,19 @@
 <!doctype html>
-<style>
-  .spacerheader {
-    width: 30px;
-  }
-  .spacerrow {
-    height: 30px;
-  }
-  #status {
-    padding-top: 10px;
-    width: 440px;
-  }
-  #codetext::selection {
-    background: #b4b4b4;
-  }
-  #codeLabels {
-    table-layout: fixed;
-  }
-
-  #cpuState {
-    font-family: "Lucida Console", Courier, monospace;
-    table-layout: fixed;
-  }
-
-  #ram {
-    font-family: "Lucida Console", Courier, monospace;
-    table-layout: fixed;
-  }
-
-  #flags {
-    font-family: "Lucida Console", Courier, monospace;
-    table-layout: fixed;
-  }
-
-  #labels {
-    font-family: "Lucida Console", Courier, monospace;
-    table-layout: fixed;
-  }
-
-  #ram td {
-    padding: 2px;
-  }
-
-  #cpuState tr td {
-    min-width: 40px;
-  }
-
-  #flags td {
-    min-width: 40px;
-  }
-
-  td.labelName {
-    background-color: #f3dcfa;
-    font-weight: bold;
-    min-width: 120px;
-  }
-
-  td.regName {
-    background-color: #ffffc1;
-    font-weight: bold;
-    text-align: right;
-  }
-
-  td.ramHeader {
-    background-color: #cde9fa;
-    font-weight: bold;
-    text-align: right;
-  }
-
-  td.flagHeader {
-    background-color: #feeeb6;
-    font-weight: bold;
-    text-align: right;
-  }
-
-  .headerRow {
-    text-align: center;
-    font-weight: bold;
-  }
-
-  #codetext {
-    width: 400px;
-    height: 600px;
-  }
-
-  .breakpoint::before {
-    display: block;
-    width: 1em;
-    height: 1em;
-    position: absolute;
-    left: .5em;
-    border-radius: 50%;
-    background-color: red;
-    content: '';
-  }
-
-</style>
+<html>
+<head>
+  <link rel="stylesheet" href="main.css" />
+</head>
 <body>
 <table id="control">
   <tr>
     <td>
-      <button id="run" title="Run the program untill it reaches given steps.">Run</button>
-      <button id="runtocursor" title="Run the program untill it reaches cursor.">Runtocursor</button> Max steps: <input size="6" id="maxsteps"></input>
-      <button id="prev" title="Go backward in time for a single machine instruction.">Step prev</button>
-      <button id="next" title="Execute a single machine instruction from current step.">Step next</button>
+      <button id="run" title="Run the program untill it reaches given steps.">⏵︎</button>
+      <button id="runtocursor" title="Run the program untill it reaches cursor.">⇥</button>
+      <button id="prev" title="Go backward in time for a single machine instruction.">↶</button>
+      <button id="next" title="Execute a single machine instruction from current step.">↷</button>
+      <button id="stop" title="Reset execution state.">⏹</button>
+      <input disabled="disabled" size="6" id="stepnumber" />
+      <input type="checkbox" id="delaycheckbox" /><label for="delaycheckbox">delay</label>
     </td>
     <td class="spacerheader"></td>
     <td>Code sample:</td>
@@ -180,3 +91,4 @@
 <script src="js8080simBundle.js"></script>
 <script src="ui.js"></script>
 </body>
+</html>
