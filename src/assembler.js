@@ -429,6 +429,16 @@ class Assembler {
         this._expectArgsCount(sl, 0);
         return [0b11100011];
       }
+      case 'in': {
+        this._expectArgsCount(sl, 1);
+        let imm= this._argImm(sl, sl.args[0]);
+        return [0b11011011, imm];
+      }
+      case 'out': {
+        this._expectArgsCount(sl, 1);
+        let imm = this._argImm(sl, sl.args[0]);
+        return [0b11010011, imm];
+      }
       default:
         this._assemblyError(sl.pos, `unknown instruction ${sl.instr}`);
     }

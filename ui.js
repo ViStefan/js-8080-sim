@@ -19,6 +19,8 @@ const stepnumber= document.querySelector('#stepnumber');
 const ramstart = document.querySelector('#ramstart');
 const ramshowmode = document.querySelector('#ramshowmode');
 const delaycheckbox= document.querySelector('#delaycheckbox');
+const portIn = document.querySelector("#portIn");
+const portOut = document.querySelector("#portOut");
 document.querySelector("#run").addEventListener("mousedown", () => dispatchStep("run"));
 document.querySelector("#prev").addEventListener("mousedown", () => dispatchStep("prev"));
 document.querySelector("#next").addEventListener("mousedown", () => dispatchStep("next"));
@@ -253,6 +255,7 @@ function loadUiState() {
 function saveUiState() {
   let state = {
     'codetext': editor.getValue(),
+    'ramstart': ramstart.value
   };
   localStorage.setItem(STORAGE_ID, JSON.stringify(state));
 }
@@ -351,7 +354,6 @@ async function onRunCode(cursor, stepping= false) {
   }
 
   // Populate RAM table.
-  ramstart.value = "0000";
   populateRamTable();
 
   // Populate labels table.
@@ -393,11 +395,28 @@ async function runProg(progText, maxSteps, breakpoints) {
   const memoryAt = (addr) => {
     return mem[addr];
   };
-  js8080sim.CPU8080.init(memoryTo, memoryAt);
+  js8080sim.CPU8080.init(memoryTo, memoryAt,
+      (port, v) => {
+          console.log(v);
+          console.log(String.fromCharCode(v));
+          portOut.value += String.fromCharCode(v);
+      },
+      function* (port) {
+        const v = portIn.value;
+        for (let i = 0; i < v.length; i++) {
+            yield v[i].charCodeAt(0);
+          }
+      }(0)
+  );
   js8080sim.CPU8080.set('PC', 0);
 
   for (let i = 0; i < currentStep; i++) {
     js8080sim.CPU8080.steps(1);
+    if (js8080sim.CPU8080.status().halted) {
+      currentStep = i;
+      stepnumber.value = currentStep;
+      break;
+    }
   }
 
   stepnumber.value = currentStep;
@@ -418,8 +437,7 @@ async function runProg(progText, maxSteps, breakpoints) {
     highlightCurrentLine(sourceLines, js8080sim.CPU8080.status().pc);
     stepnumber.value = i;
 
-
-    if (delaycheckbox.checked) await delay(150);
+    if (delaycheckbox.checked) await delay(300);
 
     if (breakpointPcs.indexOf(js8080sim.CPU8080.status().pc) !== -1) {
       currentStep = i + 1;

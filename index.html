@@ -1,5 +1,5 @@
 <!doctype html>
-<html>
+<html xmlns="http://www.w3.org/1999/html">
 <head>
   <link rel="stylesheet" href="main.css" />
 </head>
@@ -86,6 +86,11 @@
     </td>
   </tr>
 </table>
+
+<label for="portIn">stdin (portnumber 0):</label><br>
+<textarea id="portIn"></textarea><br>
+<label for="portOut">stdout (portnumber 1):</label><br>
+<textarea id="portOut"></textarea>
 
 <!-- Include bundle. This exports a global symbol for accessing js8080sim -->
 <script src="js8080simBundle.js"></script>

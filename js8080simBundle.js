@@ -463,6 +463,16 @@ class Assembler {
         this._expectArgsCount(sl, 0);
         return [0b11100011];
       }
+      case 'in': {
+        this._expectArgsCount(sl, 1);
+        let imm= this._argImm(sl, sl.args[0]);
+        return [0b11011011, imm];
+      }
+      case 'out': {
+        this._expectArgsCount(sl, 1);
+        let imm = this._argImm(sl, sl.args[0]);
+        return [0b11010011, imm];
+      }
       default:
         this._assemblyError(sl.pos, `unknown instruction ${sl.instr}`);
     }
@@ -1006,7 +1016,7 @@ var INTERRUPT = 0;
 var ZERO      = 0x40;
 var SIGN      = 0x80;
 
-var byteTo, byteAt, portOut,portIn, ticks;
+var byteTo, byteAt, portOut, portIn;
 
 var Cpu = function ()
 {
@@ -1105,12 +1115,14 @@ Cpu.prototype.step = function() {
 };
 
 Cpu.prototype.writePort = function (port, v) {
+  console.log(v);
   if (portOut) portOut(port & 0xff,v);
 };
 
 Cpu.prototype.readPort = function (port) {
-  if (portIn) return portIn(port & 0xff);
-  return 255;
+  console.log(portIn);
+  if (portIn) return portIn.next().value;
+  return 0;
 };
 
 Cpu.prototype.getByte = function (addr) {
@@ -3259,10 +3271,9 @@ exports["steps"] = function(Ts){
   };
 exports["T"] = function(){return proc.cycles;};
 exports["reset"] = reset;
-exports["init"] = function(bt,ba,tck,porto,porti){
+exports["init"] = function(bt,ba,porto,porti){
     byteTo=bt; 
     byteAt = ba; 
-    ticks=tck; 
     portOut = porto;
     portIn = porti;
     proc = new Cpu();
